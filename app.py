@@ -18,12 +18,12 @@ st.write("Liste des villes restreintes à celles de plus 20000 habitants")
 
 ################################################################################
 ### CHARGEMENT DES DONNÉES ###
-df_villes = pd.read_csv("data/communes-france-2025.csv", sep=';', encoding='utf-8',dtype={"code_insee": str}) 
-evol = pd.read_csv("data/data_age_graph.csv", sep=';', encoding='utf-8', dtype={"code_insee": str}) 
-climat = gpd.read_file("data/Communes.geojson")
-Logements = pd.read_csv("data/base-ic-logement-2021.CSV", sep=";", encoding='ISO-8859-1')
-lieux_visite = pd.read_csv("data/base-des-lieux-et-des-equipements-culturels.csv", sep=";")
-salaires = pd.read_csv("data/salaireNET.csv", sep=";")
+df_villes = pd.read_csv("communes-france-2025.csv", sep=';', encoding='utf-8',dtype={"code_insee": str}) 
+evol = pd.read_csv("data_age_graph.csv", sep=';', encoding='utf-8', dtype={"code_insee": str}) 
+climat = gpd.read_file("Communes.geojson")
+Logements = pd.read_csv("base-ic-logement-2021.CSV", sep=";", encoding='ISO-8859-1')
+lieux_visite = pd.read_csv("base-des-lieux-et-des-equipements-culturels.csv", sep=";")
+salaires = pd.read_csv("salaireNET.csv", sep=";")
 
 ################################################################################
 ### FONCTION : RÉCUPÉRATION DES DONNÉES ###
