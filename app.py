@@ -21,7 +21,10 @@ st.write("Liste des villes restreintes à celles de plus 20000 habitants")
 df_villes = pd.read_csv("communes-france-2025.csv", sep=';', encoding='utf-8',dtype={"code_insee": str}) 
 evol = pd.read_csv("data_age_graph.csv", sep=';', encoding='utf-8', dtype={"code_insee": str}) 
 climat = gpd.read_file("Communes.geojson")
-Logements = pd.read_csv("base-ic-logement-2021.CSV", sep=";", encoding='ISO-8859-1')
+CATL = pd.read_csv("df_CATL.csv", sep=",", encoding='ISO-8859-1')
+TYPL = pd.read_csv("df_TYPL.csv", sep=",", encoding='ISO-8859-1')
+NBPI = pd.read_csv("df_NBPI.csv", sep=",", encoding='ISO-8859-1')
+SURF = pd.read_csv("df_SURF.csv", sep=",", encoding='ISO-8859-1')
 lieux_visite = pd.read_csv("base-des-lieux-et-des-equipements-culturels.csv", sep=";")
 salaires = pd.read_csv("salaireNET.csv", sep=";")
 
@@ -166,7 +169,7 @@ def get_commune_data(code_insee):
 
 ################################################################################
 ### CRÉATION DES ONGLETS ###
-tabs = st.tabs(["Données Générales", "Météo et Climat", "Logements", "Emploi", "Culture et Tourisme", "Sources"])
+tabs = st.tabs(["Données Générales", "Météo et Climat", "Logements", "Emploi", "Culture et Tourisme", "Crédits et Sources"])
 
 ### ONGLET 1 : Données Générales et Données Météo ###
 ### INTERFACE : SÉLECTION DES VILLES ###
@@ -239,7 +242,7 @@ with tabs[0]:
             contour_2, centre_2 = get_commune_data(code_insee_v2)
             if contour_2 and centre_2:
                 m_2 = folium.Map(location=[centre_2[1], centre_2[0]], zoom_start=11)
-                folium.Polygon(locations=[[coord[1], coord[0]] for coord in contour_2], color="darkred", fill=True, fill_opacity=0.2).add_to(m_2)
+                folium.Polygon(locations=[[coord[1], coord[0]] for coord in contour_2], color="royalblue", fill=True, fill_opacity=0.2).add_to(m_2)
                 folium_static(m_2, width=700, height=400)
     
         # Ajout du graphique d'évolution de la population
@@ -257,8 +260,8 @@ with tabs[0]:
 
         # Tracer le graphique de l'évolution de la population
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=annees, y=pop_ville1, mode='lines+markers', name=ville1, line=dict(color='royalblue')))
-        fig.add_trace(go.Scatter(x=annees, y=pop_ville2, mode='lines+markers', name=ville2, line=dict(color='firebrick')))
+        fig.add_trace(go.Scatter(x=annees, y=pop_ville1, mode='lines+markers', name=ville1, line=dict(color='firebrick')))
+        fig.add_trace(go.Scatter(x=annees, y=pop_ville2, mode='lines+markers', name=ville2, line=dict(color='royalblue')))
 
         fig.update_layout(
             title="Évolution de la population (1876 - 2022)",
@@ -354,64 +357,119 @@ with tabs[1]:
 
 ################################################################################
 ### ONGLET 3 : Données Logements ###
-### ONGLET 3 : Données Logements ###
 with tabs[2]:
     st.subheader("Logements")
 
     if not st.session_state.get("compare_clicked", False):
         st.info("Veuillez d'abord sélectionner deux villes pour afficher les logements.")
     else:
-        Logements['CODGEO'] = Logements['CODGEO'].apply(lambda x: str(x).zfill(5) if len(str(x)) == 4 else str(x))
-        logement_ville1 = Logements[Logements['CODGEO'] == code_v1]
-        logement_ville2 = Logements[Logements['CODGEO'] == code_v2]
+        # Mise en forme des codes communes
+        for df in [CATL, TYPL, NBPI, SURF]:
+            df['COMMUNE'] = df['COMMUNE'].astype(str).apply(lambda x: x.zfill(5) if len(x) == 4 else x)
 
-        if not logement_ville1.empty and not logement_ville2.empty:
-            v1 = logement_ville1.iloc[0]
-            v2 = logement_ville2.iloc[0]
+        catl_v1, catl_v2 = CATL[CATL['COMMUNE'] == code_v1], CATL[CATL['COMMUNE'] == code_v2]
+        typl_v1, typl_v2 = TYPL[TYPL['COMMUNE'] == code_v1], TYPL[TYPL['COMMUNE'] == code_v2]
+        nbpi_v1, nbpi_v2 = NBPI[NBPI['COMMUNE'] == code_v1], NBPI[NBPI['COMMUNE'] == code_v2]
+        surf_v1, surf_v2 = SURF[SURF['COMMUNE'] == code_v1], SURF[SURF['COMMUNE'] == code_v2]
 
+        if not catl_v1.empty and not catl_v2.empty:
             with st.expander("🏘️ Répartition des logements par catégorie"):
-                data_cat = pd.DataFrame({
-                    "Catégorie": ["Résidences principales", "Résidences secondaires / occasionnels", "Logements vacants"],
-                    ville1: [v1["P21_RP"], v1["P21_RSECOCC"], v1["P21_LOGVAC"]],
-                    ville2: [v2["P21_RP"], v2["P21_RSECOCC"], v2["P21_LOGVAC"]],
-                })
-                st.dataframe(data_cat)
+                def prepare_cat_data(df):
+                    df['CATL'] = df['CATL'].astype(str).str.strip()
+                    df = df[df['CATL'].isin(['1', '2', '3', '4', 'Z'])]
+                    grouped = df.groupby('CATL').size().reset_index(name='Nombre_de_logements')
+                    grouped['Catégorie'] = grouped['CATL'].map({
+                        '1': 'Résidences principales',
+                        '2': 'Logements occasionnels',
+                        '3': 'Résidences secondaires',
+                        '4': 'Logements vacants',
+                        'Z': 'Hors logement ordinaire'
+                    })
+                    return grouped
 
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"#### 📍 {ville1}")
+                    st.dataframe(prepare_cat_data(catl_v1))
+                with col2:
+                    st.markdown(f"#### 📍 {ville2}")
+                    st.dataframe(prepare_cat_data(catl_v2))
+
+        if not typl_v1.empty and not typl_v2.empty:
             with st.expander("🏗️ Répartition des logements par type"):
-                data_type = pd.DataFrame({
-                    "Type": ["Maison", "Appartement"],
-                    ville1: [v1["P21_MAISON"], v1["P21_APPART"]],
-                    ville2: [v2["P21_MAISON"], v2["P21_APPART"]],
-                })
-                st.dataframe(data_type)
+                def prepare_type_data(df):
+                    df['TYPL'] = df['TYPL'].astype(str).str.strip()
+                    df = df[df['TYPL'].isin(['1', '2', '3', '4', '5', '6', 'Z'])]
+                    grouped = df.groupby('TYPL').size().reset_index(name='Nombre_de_logements')
+                    grouped['Type'] = grouped['TYPL'].map({
+                        '1': 'Maison',
+                        '2': 'Appartement',
+                        '3': 'Logement-foyer',
+                        '4': 'Chambre d\'hôtel',
+                        '5': 'Habitation de fortune',
+                        '6': 'Pièce indépendante',
+                        'Z': 'Hors logement ordinaire'
+                    })
+                    return grouped
 
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"#### 🏡 {ville1}")
+                    st.dataframe(prepare_type_data(typl_v1))
+                with col2:
+                    st.markdown(f"#### 🏢 {ville2}")
+                    st.dataframe(prepare_type_data(typl_v2))
+
+        if not surf_v1.empty and not surf_v2.empty:
             with st.expander("📐 Répartition des logements par superficie"):
-                data_surf = pd.DataFrame({
-                    "Superficie": [
-                        "Moins de 30 m²", "30 à 40 m²", "40 à 60 m²",
-                        "60 à 80 m²", "80 à 100 m²", "100 à 120 m²", "120 m² ou plus"
-                    ],
-                    ville1: [
-                        v1["P21_RP_M30M2"], v1["P21_RP_3040M2"], v1["P21_RP_4060M2"],
-                        v1["P21_RP_6080M2"], v1["P21_RP_80100M2"], v1["P21_RP_100120M2"], v1["P21_RP_120M2P"]
-                    ],
-                    ville2: [
-                        v2["P21_RP_M30M2"], v2["P21_RP_3040M2"], v2["P21_RP_4060M2"],
-                        v2["P21_RP_6080M2"], v2["P21_RP_80100M2"], v2["P21_RP_100120M2"], v2["P21_RP_120M2P"]
-                    ]
-                })
-                st.dataframe(data_surf)
+                surface_labels = {
+                    '1': 'Moins de 30 m²',
+                    '2': 'De 30 à moins de 40 m²',
+                    '3': 'De 40 à moins de 60 m²',
+                    '4': 'De 60 à moins de 80 m²',
+                    '5': 'De 80 à moins de 100 m²',
+                    '6': 'De 100 à moins de 120 m²',
+                    '7': '120 m² ou plus',
+                    'Y': 'Hors résidence principale',
+                    'Z': 'Hors logement ordinaire'
+                }
 
+                def prepare_surf_data(df):
+                    grouped = df.groupby('SURF').size().reset_index(name='Nombre_de_logements')
+                    grouped['Superficie'] = grouped['SURF'].map(surface_labels)
+                    return grouped.dropna()
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"#### 📏 {ville1}")
+                    st.dataframe(prepare_surf_data(surf_v1))
+                with col2:
+                    st.markdown(f"#### 📏 {ville2}")
+                    st.dataframe(prepare_surf_data(surf_v2))
+
+        if not nbpi_v1.empty and not nbpi_v2.empty:
             with st.expander("🧱 Répartition des logements par nombre de pièces"):
-                data_pieces = pd.DataFrame({
-                    "Nombre de pièces": ["1", "2", "3", "4", "5 ou +"],
-                    ville1: [v1["P21_RP_1P"], v1["P21_RP_2P"], v1["P21_RP_3P"], v1["P21_RP_4P"], v1["P21_RP_5PP"]],
-                    ville2: [v2["P21_RP_1P"], v2["P21_RP_2P"], v2["P21_RP_3P"], v2["P21_RP_4P"], v2["P21_RP_5PP"]],
-                })
-                st.dataframe(data_pieces)
+                piece_labels = {
+                    **{f"{i:02}": f"{i} pièce{'s' if i > 1 else ''}" for i in range(1, 20)},
+                    '20': '20 pièces et plus',
+                    'YY': 'Hors résidence principale',
+                    'ZZ': 'Hors logement ordinaire'
+                }
+
+                def prepare_piece_data(df):
+                    grouped = df.groupby('NBPI').size().reset_index(name='Nombre_de_logements')
+                    grouped['Nombre_de_pieces'] = grouped['NBPI'].map(piece_labels)
+                    return grouped.dropna()
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"#### 🧱 {ville1}")
+                    st.dataframe(prepare_piece_data(nbpi_v1))
+                with col2:
+                    st.markdown(f"#### 🧱 {ville2}")
+                    st.dataframe(prepare_piece_data(nbpi_v2))
         else:
             st.warning("Aucune donnée logement disponible pour au moins une des deux villes sélectionnées.")
-        
 
 ################################################################################
 ### ONGLET 4 : Données Emploi ###
@@ -421,11 +479,12 @@ with tabs[3]:
     if not st.session_state.get("compare_clicked", False):
         st.info("Veuillez d'abord sélectionner deux villes pour afficher les données sur l'emploi.")
     else:
+
         # Mapping ville -> CODGEO
         codgeo_ville1 = code_v1  # à implémenter
         codgeo_ville2 = code_v2
-        row_v1 = salaires[salaires["CODGEO"] == code_v1]
-        row_v2 = salaires[salaires["CODGEO"] == code_v2]
+        row_v1 = salaires[salaires["CODGEO"] == codgeo_ville1]
+        row_v2 = salaires[salaires["CODGEO"] == codgeo_ville2]
 
         if row_v1.empty or row_v2.empty:
             st.warning("Pas de données d'emploi disponibles pour une des deux villes.")
@@ -440,8 +499,10 @@ with tabs[3]:
             # Salaire par genre
             with st.expander("👥 Salaire par genre"):
                 fig_sexe = go.Figure(data=[
-                    go.Bar(name=ville1, x=["Femmes", "Hommes"], y=[row_v1["SNHMF22"].values[0], row_v1["SNHMH22"].values[0]]),
-                    go.Bar(name=ville2, x=["Femmes", "Hommes"], y=[row_v2["SNHMF22"].values[0], row_v2["SNHMH22"].values[0]])
+                    go.Bar(name=ville1, x=["Femmes", "Hommes"], y=[row_v1["SNHMF22"].values[0], row_v1["SNHMH22"].values[0]],
+                            marker_color='firebrick'),
+                    go.Bar(name=ville2, x=["Femmes", "Hommes"], y=[row_v2["SNHMF22"].values[0], row_v2["SNHMH22"].values[0]],
+                    marker_color='royalblue')
                 ])
                 fig_sexe.update_layout(
                     barmode='group',
@@ -457,10 +518,10 @@ with tabs[3]:
                 fig_age = go.Figure(data=[
                     go.Bar(name=ville1, x=["18-25 ans", "26-50 ans", "50 ans et +"], y=[
                         row_v1["SNHM1822"].values[0], row_v1["SNHM2622"].values[0], row_v1["SNHM5022"].values[0]
-                    ]),
+                    ], marker_color='red'),
                     go.Bar(name=ville2, x=["18-25 ans", "26-50 ans", "50 ans et +"], y=[
                         row_v2["SNHM1822"].values[0], row_v2["SNHM2622"].values[0], row_v2["SNHM5022"].values[0]
-                    ])
+                    ], marker_color='blue')
                 ])
                 fig_age.update_layout(
                     barmode='group',
@@ -480,8 +541,8 @@ with tabs[3]:
                         row_v2["SNHME22"].values[0], row_v2["SNHMO22"].values[0]]
 
                 fig_cat = go.Figure(data=[
-                    go.Bar(name=ville1, x=categories, y=v1_cats),
-                    go.Bar(name=ville2, x=categories, y=v2_cats)
+                    go.Bar(name=ville1, x=categories, y=v1_cats, marker_color='firebrick'),
+                    go.Bar(name=ville2, x=categories, y=v2_cats, marker_color='royalblue')
                 ])
                 fig_cat.update_layout(
                     barmode='group',
@@ -502,92 +563,92 @@ with tabs[4]:
         st.info("Veuillez d'abord sélectionner deux villes pour afficher les lieux culturels.")
     else:
         if ville1 and ville2 and 'centre_1' in locals() and 'centre_2' in locals():
-            # Filtrer les lieux par ville
             cult_ville1 = lieux_visite[lieux_visite['code_insee'] == code_v1]
             cult_ville2 = lieux_visite[lieux_visite['code_insee'] == code_v2]
 
             col1, col2 = st.columns(2)
 
-            # --- Carte pour Ville 1 ---
+            # --- Carte et infos pour Ville 1 ---
             with col1:
                 if not cult_ville1.empty:
                     st.subheader(f"Lieux culturels à {ville1}")
-                    m_ville1 = folium.Map(location=[centre_1[1], centre_1[0]], zoom_start=12)
+
+                    selected_nom1 = st.selectbox(f"Sélectionnez un lieu à {ville1}", cult_ville1['Nom'].unique())
+                    lieu_info1 = cult_ville1[cult_ville1['Nom'] == selected_nom1].iloc[0]
+
+                    m1 = folium.Map(location=[centre_1[1], centre_1[0]], zoom_start=12)
                     for _, lieu in cult_ville1.iterrows():
-                        if pd.notnull(lieu['Latitude']) and pd.notnull(lieu['Longitude']):
-                            folium.Marker(
-                                location=[lieu['Latitude'], lieu['Longitude']],
-                                popup=lieu['Nom'],
-                                icon=folium.Icon(color='blue', icon='info-sign')
-                            ).add_to(m_ville1)
-                    folium_static(m_ville1, width=600, height=400)
+                        nom = lieu['Nom']
+                        color = 'darkred' if nom == selected_nom1 else 'lightgray'
+                        folium.Marker(
+                            location=[lieu['Latitude'], lieu['Longitude']],
+                            popup=nom,
+                            icon=folium.Icon(color=color, icon='info-sign')
+                        ).add_to(m1)
+                    folium_static(m1, width=600, height=400)
 
-                    # Sélecteur et infos
-                    lieu_select = st.selectbox(f"Sélectionnez un lieu à {ville1}", cult_ville1['Nom'].unique())
-                    lieu_info = cult_ville1[cult_ville1['Nom'] == lieu_select].iloc[0]
-
-                    st.markdown(f"**Adresse** : {lieu_info['Adresse']}")
-                    fonctions = [lieu_info.get(f'Fonction_{i}') for i in range(1, 5) if pd.notnull(lieu_info.get(f'Fonction_{i}'))]
+                    st.markdown(f"**Adresse** : {lieu_info1['Adresse']}")
+                    fonctions = [lieu_info1.get(f'Fonction_{i}') for i in range(1, 5) if pd.notnull(lieu_info1.get(f'Fonction_{i}'))]
                     if fonctions:
                         st.markdown("**Fonction(s)** : " + ", ".join(fonctions))
 
-                    if pd.notnull(lieu_info.get('Type_de_cinema')):
+                    if pd.notnull(lieu_info1.get('Type_de_cinema')):
                         st.markdown("🎬 **Cinéma**")
-                        st.write(f"Type : {lieu_info['Type_de_cinema']}")
-                        st.write(f"Multiplexe : {lieu_info['Multiplexe']}")
-                        st.write(f"Fauteuils : {lieu_info['Nombre_fauteuils_de_cinema']}")
-                        st.write(f"Écrans : {lieu_info['Nombre_ecrans']}")
-                    elif pd.notnull(lieu_info.get('Organisme_Siege_du_theatre')):
+                        st.write(f"Type : {lieu_info1['Type_de_cinema']}")
+                        st.write(f"Multiplexe : {lieu_info1['Multiplexe']}")
+                        st.write(f"Fauteuils : {lieu_info1['Nombre_fauteuils_de_cinema']}")
+                        st.write(f"Écrans : {lieu_info1['Nombre_ecrans']}")
+                    elif pd.notnull(lieu_info1.get('Organisme_Siege_du_theatre')):
                         st.markdown("🎭 **Théâtre**")
-                        st.write(f"Organisme : {lieu_info['Organisme_Siege_du_theatre']}")
-                        st.write(f"Salles : {lieu_info['Nombre_de_salles_de_theatre']}")
-                        st.write(f"Jauge : {lieu_info['Jauge_du_theatre']}")
-                    elif pd.notnull(lieu_info.get("Code_du_reseau_de_Bibliotheques")):
+                        st.write(f"Organisme : {lieu_info1['Organisme_Siege_du_theatre']}")
+                        st.write(f"Salles : {lieu_info1['Nombre_de_salles_de_theatre']}")
+                        st.write(f"Jauge : {lieu_info1['Jauge_du_theatre']}")
+                    elif pd.notnull(lieu_info1.get("Code_du_reseau_de_Bibliotheques")):
                         st.markdown("📚 **Bibliothèque**")
-                        st.write(f"Réseau : {lieu_info['Nom_du_Reseau_de_Bibliotheques']}")
-                        st.write(f"Code réseau : {lieu_info['Code_du_reseau_de_Bibliotheques']}")
-
+                        st.write(f"Réseau : {lieu_info1['Nom_du_Reseau_de_Bibliotheques']}")
+                        st.write(f"Code réseau : {lieu_info1['Code_du_reseau_de_Bibliotheques']}")
                 else:
                     st.info(f"Aucun lieu culturel trouvé pour {ville1}.")
 
-            # --- Carte pour Ville 2 ---
+            # --- Carte et infos pour Ville 2 ---
             with col2:
                 if not cult_ville2.empty:
                     st.subheader(f"Lieux culturels à {ville2}")
-                    m_ville2 = folium.Map(location=[centre_2[1], centre_2[0]], zoom_start=12)
+
+                    selected_nom2 = st.selectbox(f"Sélectionnez un lieu à {ville2}", cult_ville2['Nom'].unique())
+                    lieu_info2 = cult_ville2[cult_ville2['Nom'] == selected_nom2].iloc[0]
+
+                    m2 = folium.Map(location=[centre_2[1], centre_2[0]], zoom_start=12)
                     for _, lieu in cult_ville2.iterrows():
-                        if pd.notnull(lieu['Latitude']) and pd.notnull(lieu['Longitude']):
-                            folium.Marker(
-                                location=[lieu['Latitude'], lieu['Longitude']],
-                                popup=lieu['Nom'],
-                                icon=folium.Icon(color='green', icon='info-sign')
-                            ).add_to(m_ville2)
-                    folium_static(m_ville2, width=600, height=400)
+                        nom = lieu['Nom']
+                        color = 'blue' if nom == selected_nom2 else 'lightgray'
+                        folium.Marker(
+                            location=[lieu['Latitude'], lieu['Longitude']],
+                            popup=nom,
+                            icon=folium.Icon(color=color, icon='info-sign')
+                        ).add_to(m2)
+                    folium_static(m2, width=600, height=400)
 
-                    # Sélecteur et infos
-                    lieu_select = st.selectbox(f"Sélectionnez un lieu à {ville2}", cult_ville2['Nom'].unique())
-                    lieu_info = cult_ville2[cult_ville2['Nom'] == lieu_select].iloc[0]
-
-                    st.markdown(f"**Adresse** : {lieu_info['Adresse']}")
-                    fonctions = [lieu_info.get(f'Fonction_{i}') for i in range(1, 5) if pd.notnull(lieu_info.get(f'Fonction_{i}'))]
+                    st.markdown(f"**Adresse** : {lieu_info2['Adresse']}")
+                    fonctions = [lieu_info2.get(f'Fonction_{i}') for i in range(1, 5) if pd.notnull(lieu_info2.get(f'Fonction_{i}'))]
                     if fonctions:
                         st.markdown("**Fonction(s)** : " + ", ".join(fonctions))
 
-                    if pd.notnull(lieu_info.get('Type_de_cinema')):
+                    if pd.notnull(lieu_info2.get('Type_de_cinema')):
                         st.markdown("🎬 **Cinéma**")
-                        st.write(f"Type : {lieu_info['Type_de_cinema']}")
-                        st.write(f"Multiplexe : {lieu_info['Multiplexe']}")
-                        st.write(f"Fauteuils : {lieu_info['Nombre_fauteuils_de_cinema']}")
-                        st.write(f"Écrans : {lieu_info['Nombre_ecrans']}")
-                    elif pd.notnull(lieu_info.get('Organisme_Siege_du_theatre')):
+                        st.write(f"Type : {lieu_info2['Type_de_cinema']}")
+                        st.write(f"Multiplexe : {lieu_info2['Multiplexe']}")
+                        st.write(f"Fauteuils : {lieu_info2['Nombre_fauteuils_de_cinema']}")
+                        st.write(f"Écrans : {lieu_info2['Nombre_ecrans']}")
+                    elif pd.notnull(lieu_info2.get('Organisme_Siege_du_theatre')):
                         st.markdown("🎭 **Théâtre**")
-                        st.write(f"Organisme : {lieu_info['Organisme_Siege_du_theatre']}")
-                        st.write(f"Salles : {lieu_info['Nombre_de_salles_de_theatre']}")
-                        st.write(f"Jauge : {lieu_info['Jauge_du_theatre']}")
-                    elif pd.notnull(lieu_info.get("Code_du_reseau_de_Bibliotheques")):
+                        st.write(f"Organisme : {lieu_info2['Organisme_Siege_du_theatre']}")
+                        st.write(f"Salles : {lieu_info2['Nombre_de_salles_de_theatre']}")
+                        st.write(f"Jauge : {lieu_info2['Jauge_du_theatre']}")
+                    elif pd.notnull(lieu_info2.get("Code_du_reseau_de_Bibliotheques")):
                         st.markdown("📚 **Bibliothèque**")
-                        st.write(f"Réseau : {lieu_info['Nom_du_Reseau_de_Bibliotheques']}")
-                        st.write(f"Code réseau : {lieu_info['Code_du_reseau_de_Bibliotheques']}")
+                        st.write(f"Réseau : {lieu_info2['Nom_du_Reseau_de_Bibliotheques']}")
+                        st.write(f"Code réseau : {lieu_info2['Code_du_reseau_de_Bibliotheques']}")
                 else:
                     st.info(f"Aucun lieu culturel trouvé pour {ville2}.")
         else:
@@ -596,9 +657,17 @@ with tabs[4]:
 ################################################################################
 ### ONGLET 6 : Sources ###
 with tabs[5]:
+    st.subheader("Crédits")
+    st.markdown("""
+    - **Participants**  
+        - Rayan BEN YACOUB : www.linkedin.com/in/rayan-ben-yacoub-a3199b269 - https://github.com/Rayan9310
+        - Eva BERTRAND : www.linkedin.com/in/eva-bertrand-9b2051271 - https://github.com/E-VAA
+        - Maximilien SOMAHORO : www.linkedin.com/me?trk=p_mwlite_profile_self-secondary_nav - https://github.com/maximiliensoumahoro
+    """)
+    
+    st.markdown("---")
     st.subheader("Sources")
     st.write("Voici les sources utilisées pour alimenter les données affichées dans cette application :")
-    st.markdown("---")
 
     ####################
     # Donnéess Générales
@@ -629,9 +698,9 @@ with tabs[5]:
     # Logements
     st.subheader("🏘️ Logements")
     st.markdown("""
-    - **Données logement (base-ic-logement-2021)**  
-    INSEE  
-    (https://www.insee.fr/fr/statistiques/8268838)
+    - **FD_LOGEMTZ_FINAL_2021 ** 
+    regroupement des bases (5 bases/traitement sur R) : insee 
+    (https://www.insee.fr/fr/statistiques/8268903)
     """)
 
     ########
