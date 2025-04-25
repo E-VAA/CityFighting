@@ -610,7 +610,7 @@ with tabs[5]:
     - **Participants**  
         - Rayan BEN YACOUB : www.linkedin.com/in/rayan-ben-yacoub-a3199b269 - https://github.com/Rayan9310
         - Eva BERTRAND : www.linkedin.com/in/eva-bertrand-9b2051271 - https://github.com/E-VAA
-        - Maximilien SOMAHORO : www.linkedin.com/me?trk=p_mwlite_profile_self-secondary_nav - https://github.com/maximiliensoumahoro
+        - Maximilien SOMAHORO : www.linkedin.com/in/maximilien-soumahoro-737ab2265/ - https://github.com/maximiliensoumahoro
     """)
     
     st.markdown("---")
