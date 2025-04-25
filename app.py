@@ -630,7 +630,7 @@ with tabs[5]:
 
     - **Contours des communes**  
     API geo.api.gouv.fr  
-    (https://geo.api.gouv.fr/communes?code={CODGEO}&fields=code,nom,contour,centre)- A la place de "CODGEO", rentrer le code INSEE d'une ville
+    (https://geo.api.gouv.fr/communes?code={code_insee}&fields=code,nom,contour,centre)- A la place de "code_insee", rentrer le code INSEE d'une ville
     """)
 
     #################
@@ -646,7 +646,7 @@ with tabs[5]:
     # Logements
     st.subheader("🏘️ Logements")
     st.markdown("""
-    - **FD_LOGEMTZ_FINAL_2021 ** 
+    - **df_SURF, df_NBPI, df_CATL, df_TYPL ** 
     regroupement des bases (5 bases/traitement sur R) : insee 
     (https://www.insee.fr/fr/statistiques/8268903)
     """)
