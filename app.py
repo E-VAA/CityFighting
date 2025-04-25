@@ -21,10 +21,10 @@ st.write("Liste des villes restreintes à celles de plus 20000 habitants")
 df_villes = pd.read_csv("communes-france-2025.csv", sep=';', encoding='utf-8',dtype={"code_insee": str}) 
 evol = pd.read_csv("data_age_graph.csv", sep=';', encoding='utf-8', dtype={"code_insee": str}) 
 climat = gpd.read_file("Communes.geojson")
-CATL = pd.read_csv("df_CATL.csv", sep=",", encoding='ISO-8859-1')
-TYPL = pd.read_csv("df_TYPL.csv", sep=",", encoding='ISO-8859-1')
-NBPI = pd.read_csv("df_NBPI.csv", sep=",", encoding='ISO-8859-1')
-SURF = pd.read_csv("df_SURF.csv", sep=",", encoding='ISO-8859-1')
+CATL = pd.read_csv("df_CATL.csv", sep=",", encoding='utf-8')
+TYPL = pd.read_csv("df_TYPL.csv", sep=",", encoding='utf-8')
+NBPI = pd.read_csv("df_NBPI.csv", sep=",", encoding='utf-8')
+SURF = pd.read_csv("df_SURF.csv", sep=",", encoding='utf-8')
 lieux_visite = pd.read_csv("base-des-lieux-et-des-equipements-culturels.csv", sep=";")
 salaires = pd.read_csv("salaireNET.csv", sep=";")
 
@@ -151,19 +151,22 @@ def display_forecasts_for_two_cities(city1, weather1, city2, weather2):
 
 def get_commune_data(code_insee):
     url = f"https://geo.api.gouv.fr/communes?code={code_insee}&fields=code,nom,contour,centre"
-    response = requests.get(url)
-    if response.status_code == 200:
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()  # Raises an HTTPError for bad responses
         data = response.json()
         if data:
             commune_data = data[0]
             contour = commune_data.get('contour', {}).get('coordinates', None)
             centre = commune_data.get('centre', {}).get('coordinates', None)
             if contour:
-                if isinstance(contour[0][0][0], list):  # Vérifier si c'est un MultiPolygon
-                    contour = contour[0][0]  # Prendre le premier polygone
-                elif isinstance(contour[0][0], list):  # Vérifier si c'est un Polygon
-                    contour = contour[0]  # Retourner directement le polygone
+                if isinstance(contour[0][0][0], list):  # MultiPolygon
+                    contour = contour[0][0]
+                elif isinstance(contour[0][0], list):  # Polygon
+                    contour = contour[0]
             return contour, centre
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erreur lors de la récupération des données pour la commune ({code_insee}) : {e}")
     return None, None
 
 
@@ -365,8 +368,9 @@ with tabs[2]:
     else:
         # Mise en forme des codes communes
         for df in [CATL, TYPL, NBPI, SURF]:
-            df['COMMUNE'] = df['COMMUNE'].astype(str).apply(lambda x: x.zfill(5) if len(x) == 4 else x)
+            df['COMMUNE'] = df['COMMUNE'].astype(str).str.zfill(5)
 
+        # Filtrage des données déjà agrégées
         catl_v1, catl_v2 = CATL[CATL['COMMUNE'] == code_v1], CATL[CATL['COMMUNE'] == code_v2]
         typl_v1, typl_v2 = TYPL[TYPL['COMMUNE'] == code_v1], TYPL[TYPL['COMMUNE'] == code_v2]
         nbpi_v1, nbpi_v2 = NBPI[NBPI['COMMUNE'] == code_v1], NBPI[NBPI['COMMUNE'] == code_v2]
@@ -374,102 +378,46 @@ with tabs[2]:
 
         if not catl_v1.empty and not catl_v2.empty:
             with st.expander("🏘️ Répartition des logements par catégorie"):
-                def prepare_cat_data(df):
-                    df['CATL'] = df['CATL'].astype(str).str.strip()
-                    df = df[df['CATL'].isin(['1', '2', '3', '4', 'Z'])]
-                    grouped = df.groupby('CATL').size().reset_index(name='Nombre_de_logements')
-                    grouped['Catégorie'] = grouped['CATL'].map({
-                        '1': 'Résidences principales',
-                        '2': 'Logements occasionnels',
-                        '3': 'Résidences secondaires',
-                        '4': 'Logements vacants',
-                        'Z': 'Hors logement ordinaire'
-                    })
-                    return grouped
-
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown(f"#### 📍 {ville1}")
-                    st.dataframe(prepare_cat_data(catl_v1))
+                    st.dataframe(catl_v1[['Categorie', 'Nombre_de_logements']])
                 with col2:
                     st.markdown(f"#### 📍 {ville2}")
-                    st.dataframe(prepare_cat_data(catl_v2))
+                    st.dataframe(catl_v2[['Categorie', 'Nombre_de_logements']])
 
         if not typl_v1.empty and not typl_v2.empty:
             with st.expander("🏗️ Répartition des logements par type"):
-                def prepare_type_data(df):
-                    df['TYPL'] = df['TYPL'].astype(str).str.strip()
-                    df = df[df['TYPL'].isin(['1', '2', '3', '4', '5', '6', 'Z'])]
-                    grouped = df.groupby('TYPL').size().reset_index(name='Nombre_de_logements')
-                    grouped['Type'] = grouped['TYPL'].map({
-                        '1': 'Maison',
-                        '2': 'Appartement',
-                        '3': 'Logement-foyer',
-                        '4': 'Chambre d\'hôtel',
-                        '5': 'Habitation de fortune',
-                        '6': 'Pièce indépendante',
-                        'Z': 'Hors logement ordinaire'
-                    })
-                    return grouped
-
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown(f"#### 🏡 {ville1}")
-                    st.dataframe(prepare_type_data(typl_v1))
+                    st.dataframe(typl_v1[['Type', 'Nombre_de_logements']])
                 with col2:
                     st.markdown(f"#### 🏢 {ville2}")
-                    st.dataframe(prepare_type_data(typl_v2))
+                    st.dataframe(typl_v2[['Type', 'Nombre_de_logements']])
 
         if not surf_v1.empty and not surf_v2.empty:
             with st.expander("📐 Répartition des logements par superficie"):
-                surface_labels = {
-                    '1': 'Moins de 30 m²',
-                    '2': 'De 30 à moins de 40 m²',
-                    '3': 'De 40 à moins de 60 m²',
-                    '4': 'De 60 à moins de 80 m²',
-                    '5': 'De 80 à moins de 100 m²',
-                    '6': 'De 100 à moins de 120 m²',
-                    '7': '120 m² ou plus',
-                    'Y': 'Hors résidence principale',
-                    'Z': 'Hors logement ordinaire'
-                }
-
-                def prepare_surf_data(df):
-                    grouped = df.groupby('SURF').size().reset_index(name='Nombre_de_logements')
-                    grouped['Superficie'] = grouped['SURF'].map(surface_labels)
-                    return grouped.dropna()
-
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown(f"#### 📏 {ville1}")
-                    st.dataframe(prepare_surf_data(surf_v1))
+                    st.dataframe(surf_v1[['Superficie', 'Nombre_de_logements']])
                 with col2:
                     st.markdown(f"#### 📏 {ville2}")
-                    st.dataframe(prepare_surf_data(surf_v2))
+                    st.dataframe(surf_v2[['Superficie', 'Nombre_de_logements']])
 
         if not nbpi_v1.empty and not nbpi_v2.empty:
             with st.expander("🧱 Répartition des logements par nombre de pièces"):
-                piece_labels = {
-                    **{f"{i:02}": f"{i} pièce{'s' if i > 1 else ''}" for i in range(1, 20)},
-                    '20': '20 pièces et plus',
-                    'YY': 'Hors résidence principale',
-                    'ZZ': 'Hors logement ordinaire'
-                }
-
-                def prepare_piece_data(df):
-                    grouped = df.groupby('NBPI').size().reset_index(name='Nombre_de_logements')
-                    grouped['Nombre_de_pieces'] = grouped['NBPI'].map(piece_labels)
-                    return grouped.dropna()
-
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown(f"#### 🧱 {ville1}")
-                    st.dataframe(prepare_piece_data(nbpi_v1))
+                    st.dataframe(nbpi_v1[['Nombre_de_pieces', 'Nombre_de_logements']])
                 with col2:
                     st.markdown(f"#### 🧱 {ville2}")
-                    st.dataframe(prepare_piece_data(nbpi_v2))
+                    st.dataframe(nbpi_v2[['Nombre_de_pieces', 'Nombre_de_logements']])
         else:
             st.warning("Aucune donnée logement disponible pour au moins une des deux villes sélectionnées.")
+
 
 ################################################################################
 ### ONGLET 4 : Données Emploi ###
